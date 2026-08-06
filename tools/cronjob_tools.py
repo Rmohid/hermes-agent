@@ -554,6 +554,49 @@ def _validate_cron_script_path(script: Optional[str]) -> Optional[str]:
     return None
 
 
+def _validate_cron_enabled_toolsets(
+    enabled_toolsets: Optional[List[str]], *, no_agent: bool
+) -> Optional[str]:
+    """Validate a per-job ``enabled_toolsets`` allowlist against known toolsets.
+
+    Returns an error string (fail closed) when an unknown toolset is named on an
+    agent-tier job, or ``None`` when the value is acceptable.
+
+    Toolsets only scope *agent* tool loading. On a ``no_agent`` script-tier job
+    the field is meaningless (there is no agent to scope), so it is
+    accepted-and-ignored: unknown names there are not an error.
+
+    ``validate_toolset`` is the canonical registry check (it accepts every
+    registered/plugin/aliased toolset name plus the ``all``/``*`` specials).
+    """
+    if no_agent:
+        # Script tier — toolsets are meaningless; accept and ignore.
+        return None
+    if not enabled_toolsets:
+        return None
+
+    from toolsets import validate_toolset
+
+    unknown = sorted(
+        {
+            str(t).strip()
+            for t in enabled_toolsets
+            if str(t).strip() and not validate_toolset(str(t).strip())
+        }
+    )
+    if unknown:
+        return (
+            "Unknown toolset name(s) in enabled_toolsets: "
+            + ", ".join(unknown)
+            + ". Valid toolsets include web, terminal, file, memory, project, "
+            + "browser, skills, vision, tts, plus plugin and MCP toolsets. A "
+            + "job that names an unknown toolset would silently run with none "
+            + "of the requested tools — rejected to keep the gate's "
+            + "enabled_toolsets read trustworthy."
+        )
+    return None
+
+
 def _format_job(job: Dict[str, Any]) -> Dict[str, Any]:
     prompt = str(job.get("prompt") or "")
     skills = _canonical_skills(job.get("skill"), job.get("skills"))
@@ -786,6 +829,14 @@ def cronjob(
                             success=False,
                         )
 
+            # Reject unknown enabled_toolsets on agent-tier jobs (fail closed).
+            # On no_agent script-tier jobs the field is meaningless — accept/ignore.
+            toolsets_error = _validate_cron_enabled_toolsets(
+                enabled_toolsets, no_agent=_no_agent
+            )
+            if toolsets_error:
+                return tool_error(toolsets_error, success=False)
+
             job = create_job(
                 prompt=prompt or "",
                 schedule=schedule,
@@ -979,6 +1030,16 @@ def cronjob(
                             )
                 updates["context_from"] = refs or None
             if enabled_toolsets is not None:
+                # Effective tier accounts for a no_agent toggle applied in this
+                # same update — on script-tier jobs toolsets are meaningless.
+                effective_no_agent = (
+                    bool(no_agent) if no_agent is not None else bool(job.get("no_agent"))
+                )
+                toolsets_error = _validate_cron_enabled_toolsets(
+                    enabled_toolsets, no_agent=effective_no_agent
+                )
+                if toolsets_error:
+                    return tool_error(toolsets_error, success=False)
                 updates["enabled_toolsets"] = enabled_toolsets or None
             if attach_to_session is not None:
                 updates["attach_to_session"] = bool(attach_to_session)
@@ -1017,7 +1078,22 @@ def cronjob(
                 return tool_error("No updates provided.", success=False)
             updated = update_job(job_id, updates)
             _notify_provider_jobs_changed_safe()
-            return json.dumps({"success": True, "job": _format_job(updated)}, indent=2)
+            if updated is None:
+                return tool_error(f"Failed to update job '{job_id}'", success=False)
+            # Surface the local-only notice on update too (parity with create):
+            # an agent that changes deliver to origin/local — or edits
+            # schedule/prompt on an existing undeliverable job — from a
+            # CLI/TUI session must be re-warned that output will not be
+            # delivered back. The effective deliver merges this update's value
+            # over the stored job.
+            effective_deliver = (
+                _normalize_deliver_param(deliver) if "deliver" in updates else job.get("deliver")
+            )
+            _local_notice = _local_delivery_notice(updated, effective_deliver)
+            response: Dict[str, Any] = {"success": True, "job": _format_job(updated)}
+            if _local_notice:
+                response["message"] = _local_notice
+            return json.dumps(response, indent=2)
 
         return tool_error(f"Unknown cron action '{action}'", success=False)
 
