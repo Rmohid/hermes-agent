@@ -1030,17 +1030,33 @@ def cronjob(
                             )
                 updates["context_from"] = refs or None
             if enabled_toolsets is not None:
-                # Effective tier accounts for a no_agent toggle applied in this
-                # same update — on script-tier jobs toolsets are meaningless.
-                effective_no_agent = (
-                    bool(no_agent) if no_agent is not None else bool(job.get("no_agent"))
-                )
-                toolsets_error = _validate_cron_enabled_toolsets(
-                    enabled_toolsets, no_agent=effective_no_agent
-                )
-                if toolsets_error:
-                    return tool_error(toolsets_error, success=False)
                 updates["enabled_toolsets"] = enabled_toolsets or None
+
+            # Re-validate the EFFECTIVE enabled_toolsets on EVERY update, not
+            # only when this update supplies the field (parity with the
+            # provider/base_url guard above). A job persisted before this guard
+            # (or written directly to the store) may already hold an unknown
+            # toolset name; editing any unrelated field (name, schedule, ...)
+            # would otherwise succeed and leave the hard gate's
+            # enabled_toolsets read untrustworthy. The effective list merges
+            # this update's normalized value over the stored job; an operator
+            # can remediate in the same update by setting enabled_toolsets to a
+            # valid list (or clearing it). Effective tier accounts for a
+            # no_agent toggle applied in this same update — on script-tier
+            # jobs toolsets are meaningless.
+            effective_toolsets = (
+                updates["enabled_toolsets"]
+                if "enabled_toolsets" in updates
+                else job.get("enabled_toolsets")
+            )
+            effective_no_agent = (
+                bool(no_agent) if no_agent is not None else bool(job.get("no_agent"))
+            )
+            toolsets_error = _validate_cron_enabled_toolsets(
+                effective_toolsets, no_agent=effective_no_agent
+            )
+            if toolsets_error:
+                return tool_error(toolsets_error, success=False)
             if attach_to_session is not None:
                 updates["attach_to_session"] = bool(attach_to_session)
             if workdir is not None:
