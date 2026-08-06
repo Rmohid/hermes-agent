@@ -131,6 +131,8 @@ _CRON_EXFIL_COMMAND_PATTERNS = [
     (rf'curl\s+[^\n]*(?:--data(?:-raw|-binary|-urlencode)?|-d|--form|-F)\s+[^\n]*{_CRON_SECRET_VAR_RE}', "exfil_curl_data"),
     (rf'wget\s+[^\n]*--post-(?:data|file)=[^\n]*{_CRON_SECRET_VAR_RE}', "exfil_wget_post"),
     (rf'curl\s+[^\n]*(?:-H|--header)\s+["\']Authorization:\s*(?:Bearer|token)\s+{_CRON_SECRET_VAR_RE}["\']', "exfil_curl_auth_header"),
+    (rf'curl\s+[^\n]*(?:-H|--header)\s+["\'][^"\'\n]*:[^"\'\n]*{_CRON_SECRET_VAR_RE}[^"\'\n]*["\']', "exfil_curl_header_value"),
+    (rf'wget\s+[^\n]*(?:--header|-H)\s*=\s*["\'][^"\'\n]*:[^"\'\n]*{_CRON_SECRET_VAR_RE}[^"\'\n]*["\']', "exfil_wget_header_value"),
 ]
 
 # Single source of truth, shared with the install-time scanner

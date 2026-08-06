@@ -1554,6 +1554,19 @@ def update_job(job_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]
                     "schedule_display",
                     updated_schedule.get("display", updated.get("schedule_display")),
                 )
+                if updated_schedule.get("kind") == "once":
+                    # Mirror create_job()'s "auto-set repeat=1 for one-shots".
+                    # A schedule flipped to a one-shot keeps its old repeat —
+                    # an "every 10m" (infinite, times=None) job updated to an
+                    # ISO time recorded `repeat:{times:None}` and CLAIMED to
+                    # run forever, while in fact completing after one fire.
+                    # That asymmetry is exactly what the hard gate's
+                    # "expiry on one-shots" check reads, so keep one-shots
+                    # canonical here too (times=None -> 1).
+                    _rep = updated.get("repeat") or {"times": None, "completed": 0}
+                    if _rep.get("times") is None:
+                        _rep["times"] = 1
+                    updated["repeat"] = _rep
                 if updated.get("state") != "paused":
                     updated_next_run = compute_next_run(updated_schedule)
                     # Same guard as create_job: an UPDATE that sets a one-shot

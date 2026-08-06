@@ -252,6 +252,23 @@ class TestUpdateJob:
         assert fetched["name"] == "New Name"
 
 
+    def test_update_schedule_to_oneshot_sets_finite_repeat(self, tmp_cron_dir):
+        """An infinite interval job flipped to a one-shot ISO time must carry a
+        finite repeat (times=1), mirroring create_job's auto-repeat. Before the
+        fix it kept `repeat:{times:None}` — claiming "forever" while actually
+        retiring after a single fire — which is the field the hard gate's
+        "expiry on one-shots" check reads."""
+        job = create_job(prompt="Was recurring", schedule="every 10m")
+        assert (job["repeat"] or {}).get("times") is None  # infinite interval
+        updated = update_job(job["id"], {"schedule": "2999-01-01T00:00:00"})
+        assert updated is not None
+        assert isinstance(updated, dict)
+        assert updated.get("schedule", {}).get("kind") == "once"
+        rep = updated.get("repeat") or {}
+        assert rep.get("times") == 1
+        assert rep.get("completed") == 0
+
+
 class TestPauseResumeJob:
     def test_pause_sets_state(self, tmp_cron_dir):
         job = create_job(prompt="Pause me", schedule="every 1h")
