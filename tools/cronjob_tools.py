@@ -432,6 +432,19 @@ def _normalize_deliver_param(value: Any) -> Optional[str]:
         parts = [str(p).strip() for p in value if str(p).strip()]
         return ",".join(parts) if parts else None
     text = str(value).strip()
+    # A string that is literally the repr of a list (legacy ``str([...])``
+    # serialization, or an MCP payload that stringified its array) is not a
+    # known platform once split(",") — flatten it so storage is always the
+    # canonical comma-separated form (parity with the scheduler boundary).
+    if text.startswith(("[", "(")) and text.endswith(("]", ")")):
+        import ast
+        try:
+            parsed = ast.literal_eval(text)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, (list, tuple)):
+            parts = [str(p).strip() for p in parsed if str(p).strip()]
+            return ",".join(parts) if parts else None
     return text or None
 
 

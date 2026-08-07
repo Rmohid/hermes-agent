@@ -1252,7 +1252,23 @@ def _normalize_deliver_value(deliver) -> str:
     if isinstance(deliver, (list, tuple)):
         parts = [str(p).strip() for p in deliver if str(p).strip()]
         return ",".join(parts) if parts else "local"
-    return str(deliver)
+    text = str(deliver).strip()
+    # A string that is literally the repr of a list — e.g. a legacy
+    # ``str([...])`` serialization persisted into jobs.json, or an MCP
+    # payload that stringified its array before calling the tool — would
+    # otherwise ``split(",")`` into ``["'telegram'"]``, which is not a known
+    # platform, and the job would silently never deliver.  Detect the
+    # list/tuple repr and flatten it like the real-list case above.
+    if text[:1] in ("[", "(") and text[-1:] in ("]", ")"):
+        import ast
+        try:
+            parsed = ast.literal_eval(text)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, (list, tuple)):
+            parts = [str(p).strip() for p in parsed if str(p).strip()]
+            return ",".join(parts) if parts else "local"
+    return text
 
 
 # Routing intent tokens — resolved at fire time, not create time, so a
