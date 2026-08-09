@@ -145,6 +145,8 @@ type KanbanMessages = {
   addComment: string
   deliveredLive: string
   requeueWithNote: string
+  requestChanges: string
+  requestChangesHelp: string
   notePosted: string
   activity: (n: number) => string
   runs: (n: number) => string
@@ -337,6 +339,8 @@ const en: KanbanMessages = {
   addComment: 'Add a comment…',
   deliveredLive: 'Delivered to the running worker within a few seconds.',
   requeueWithNote: 'Requeue with note',
+  requestChanges: 'Request changes',
+  requestChangesHelp: 'Sends this as a comment and wakes the worker with it in context.',
   notePosted: 'Note posted — worker requeued',
   activity: n => `Activity · ${n}`,
   runs: n => `Runs · ${n}`,
@@ -528,6 +532,8 @@ const ja: KanbanMessages = {
   addComment: 'コメントを追加…',
   deliveredLive: '数秒以内に実行中のワーカーへ届きます。',
   requeueWithNote: 'メモを付けて再キュー',
+  requestChanges: '変更をリクエスト',
+  requestChangesHelp: 'コメントとして送信し、コンテキスト込みでワーカーを再起動します。',
   notePosted: 'メモを投稿しました — ワーカーを再キューしました',
   activity: n => `アクティビティ・${n}`,
   runs: n => `実行・${n}`,
@@ -717,6 +723,8 @@ const zh: KanbanMessages = {
   addComment: '添加评论…',
   deliveredLive: '几秒内送达运行中的工作单元。',
   requeueWithNote: '附带备注重新入队',
+  requestChanges: '请求更改',
+  requestChangesHelp: '作为评论发送，并在上下文中唤醒工作者。',
   notePosted: '备注已发布 — 工作单元已重新入队',
   activity: n => `活动・${n}`,
   runs: n => `运行・${n}`,
@@ -905,6 +913,8 @@ const zhHant: KanbanMessages = {
   addComment: '新增留言…',
   deliveredLive: '幾秒內送達執行中的工作單元。',
   requeueWithNote: '附上備註重新排入佇列',
+  requestChanges: '請求變更',
+  requestChangesHelp: '以評論傳送，並在上下文中喚醒工作者。',
   notePosted: '備註已發布 — 工作單元已重新排入佇列',
   activity: n => `活動・${n}`,
   runs: n => `執行・${n}`,

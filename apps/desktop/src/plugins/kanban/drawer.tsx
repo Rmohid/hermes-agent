@@ -287,12 +287,14 @@ function CommentComposer({
   onRequeue,
   onSubmit,
   pending,
-  running
+  running,
+  blocked
 }: {
   onRequeue?: (body: string) => void
   onSubmit: (body: string) => void
   pending: boolean
   running?: boolean
+  blocked?: boolean
 }) {
   const k = useKanban()
   const [body, setBody] = useState('')
@@ -342,15 +344,23 @@ function CommentComposer({
           {running ? k.send : k.comment}
         </Button>
       </div>
-      {running && onRequeue && (
+      {(running && onRequeue) || (blocked && onRequeue) ? (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[0.625rem] leading-tight text-(--ui-text-quaternary)">{k.deliveredLive}</span>
-          <Button className="shrink-0" disabled={!body.trim() || pending} onClick={requeue} size="xs" variant="outline">
+          <span className="text-[0.625rem] leading-tight text-(--ui-text-quaternary)">
+            {running ? k.deliveredLive : k.requestChangesHelp}
+          </span>
+          <Button
+            className="shrink-0"
+            disabled={!body.trim() || pending}
+            onClick={requeue}
+            size="xs"
+            variant={blocked ? 'default' : 'outline'}
+          >
             <Codicon name="debug-restart" size="0.7rem" />
-            {k.requeueWithNote}
+            {blocked ? k.requestChanges : k.requeueWithNote}
           </Button>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -866,6 +876,7 @@ export function TaskDrawer({
                 onSubmit={body => commentMut.mutate(body)}
                 pending={commentMut.isPending || requeueMut.isPending}
                 running={running}
+                blocked={task.status === 'blocked'}
               />
             </Section>
 

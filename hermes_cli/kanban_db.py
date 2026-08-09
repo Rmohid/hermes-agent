@@ -4623,7 +4623,12 @@ def reclaim_task(
         return False
     if row["status"] != "running" and row["claim_lock"] is None:
         # Nothing to reclaim — already ready / blocked / done.
-        return False
+        # EXCEPTION: a *blocked* card (no claim_lock) is exactly the
+        # "request changes" case — the reviewer unblocks it so the
+        # dispatcher wakes the worker with the changes request in
+        # context. Rescue it here by clearing the block (→ ready).
+        if row["status"] != "blocked":
+            return False
     prev_lock = row["claim_lock"]
     termination = _terminate_reclaimed_worker(
         row["worker_pid"], prev_lock, signal_fn=signal_fn,
