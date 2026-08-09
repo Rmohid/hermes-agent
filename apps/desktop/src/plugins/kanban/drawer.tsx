@@ -29,11 +29,14 @@ import {
 } from '@hermes/plugin-sdk'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 
+import { CompactMarkdown } from '../../components/chat/compact-markdown'
+
 import {
   $boardSlug,
   addComment,
   deleteTask,
   estimateTask,
+  fetchAttachmentContent,
   fetchLog,
   fetchProfiles,
   fetchTask,
@@ -43,10 +46,8 @@ import {
   reassignTask,
   reclaimTask,
   taskKey,
-  uploadAttachment,
-  fetchAttachmentContent
+  uploadAttachment
 } from './api'
-import { CompactMarkdown } from '../../components/chat/compact-markdown'
 import { ModelOverrideField, overridePatch } from './model-override'
 import {
   type Diagnostic,
@@ -928,11 +929,11 @@ export function TaskDrawer({
                 </ul>
               )}
               <CommentComposer
+                blocked={task.status === 'blocked'}
                 onRequeue={body => requeueMut.mutate(body)}
                 onSubmit={body => commentMut.mutate(body)}
                 pending={commentMut.isPending || requeueMut.isPending}
                 running={running}
-                blocked={task.status === 'blocked'}
               />
             </Section>
 
