@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status as http_status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from hermes_cli import kanban_db
@@ -775,6 +775,38 @@ async def upload_task_attachment(
         return {"attachment": _attachment_dict(att) if att else None}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.get("/attachments/{attachment_id}/content")
+def read_attachment_content(attachment_id: int, board: Optional[str] = Query(None)):
+    """Return an attachment's bytes as text (for inline preview).
+
+    The dashboard opens attachments in a preview pane instead of forcing a
+    download — this endpoint serves the raw content so the frontend can
+    render it (markdown/plain text). Non-text binaries are still served via
+    the download route below. Capped at the attachment max bytes (the blob
+    itself is already capped at upload).
+    """
+    board = _resolve_board(board)
+    conn = _conn(board=board)
+    try:
+        att = kanban_db.get_attachment(conn, attachment_id)
+        if att is None:
+            raise HTTPException(status_code=404, detail="attachment not found")
+        root = kanban_db.attachments_root(board=board).resolve()
+        try:
+            stored = Path(att.stored_path).resolve()
+            stored.relative_to(root)
+        except (ValueError, OSError):
+            raise HTTPException(status_code=404, detail="attachment file unavailable")
+        if not stored.is_file():
+            raise HTTPException(status_code=404, detail="attachment file missing on disk")
+        size = stored.stat().st_size
+        if size > KANBAN_ATTACHMENT_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="attachment too large to preview inline")
+        return PlainTextResponse(stored.read_text(errors="replace"))
     finally:
         conn.close()
 

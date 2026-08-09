@@ -43,8 +43,10 @@ import {
   reassignTask,
   reclaimTask,
   taskKey,
-  uploadAttachment
+  uploadAttachment,
+  fetchAttachmentContent
 } from './api'
+import { CompactMarkdown } from '../../components/chat/compact-markdown'
 import { ModelOverrideField, overridePatch } from './model-override'
 import {
   type Diagnostic,
@@ -430,6 +432,30 @@ function AttachmentsSection({
 }) {
   const k = useKanban()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<null | { id: number | string; filename: string; text: string }>(null)
+  const [loadingId, setLoadingId] = useState<null | number | string>(null)
+  const [error, setError] = useState<null | string>(null)
+
+  const openPreview = (a: KanbanAttachment) => {
+    setError(null)
+
+    if (preview?.id === a.id) {
+      setPreview(null)
+
+      return
+    }
+
+    setLoadingId(a.id)
+    fetchAttachmentContent(a.id)
+      .then(text => {
+        setPreview({ id: a.id, filename: a.filename, text })
+      })
+      .catch(err => setError(errText(err)))
+      .finally(() => setLoadingId(null))
+  }
+
+  const previewsMarkdown = (filename: string) => /\.(md|markdown|diff|patch|txt|toml|yaml|yml|json|py|js|ts|tsx|sh)$/i.test(filename)
+  const previewRendered = preview ? (previewsMarkdown(preview.filename) ? 'md' : 'plain') : null
 
   return (
     <Section
@@ -462,18 +488,48 @@ function AttachmentsSection({
       }
       label={k.attachments(attachments.length)}
     >
-      {attachments.length > 0 ? (
-        <ul className="flex flex-col gap-1">
-          {attachments.map(attachment => (
-            <li className="flex items-center gap-1.5 text-[0.75rem] text-(--ui-text-tertiary)" key={attachment.id}>
-              <Codicon name="file" size="0.75rem" />
-              {attachment.filename}
+      <ul className="flex flex-col gap-1">
+        {attachments.map(attachment => {
+          const active = preview?.id === attachment.id
+
+          return (
+            <li className="flex flex-col gap-1" key={attachment.id}>
+              <div className="flex items-center gap-1.5 text-[0.75rem] text-(--ui-text-tertiary)">
+                <Codicon name={active ? 'chevron-down' : 'file'} size="0.75rem" />
+                <button
+                  className="inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground"
+                  onClick={() => openPreview(attachment)}
+                  type="button"
+                >
+                  <span className="truncate">{attachment.filename}</span>
+                  <span className="shrink-0 text-[0.625rem] text-(--ui-text-quaternary)">
+                    {attachment.size != null ? `${(attachment.size / 1024).toFixed(1)} KB` : ''}
+                  </span>
+                  {loadingId === attachment.id && <Codicon name="sync" size="0.7rem" spinning />}
+                </button>
+              </div>
+
+              {active && preview && (
+                <div className="rounded border border-(--ui-stroke-tertiary) bg-(--ui-bg-quaternary)/40 p-2">
+                  {error ? (
+                    <p className="text-[0.6875rem] text-(--ui-text-quaternary)">{error}</p>
+                  ) : previewRendered === 'md' ? (
+                    <div className="max-h-64 overflow-auto">
+                      <CompactMarkdown text={preview.text} />
+                    </div>
+                  ) : (
+                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[0.6875rem] leading-relaxed text-(--ui-text-secondary)">
+                      {preview.text}
+                    </pre>
+                  )}
+                </div>
+              )}
             </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-[0.75rem] text-(--ui-text-quaternary)">{k.noAttachments}</p>
-      )}
+          )
+        })}
+      </ul>
+
+      {attachments.length === 0 && <p className="text-[0.75rem] text-(--ui-text-quaternary)">{k.noAttachments}</p>}
     </Section>
   )
 }

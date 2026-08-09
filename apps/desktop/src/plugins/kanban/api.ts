@@ -218,6 +218,10 @@ export const reclaimTask = (id: string) => nudged(call(withBoard(`/tasks/${id}/r
 export const uploadAttachment = (id: string, upload: { filename: string; contentType?: string; bytes: ArrayBuffer }) =>
   call(withBoard(`/tasks/${id}/attachments`), { method: 'POST', upload })
 
+/** Fetch an attachment's raw text content for inline preview (markdown/plain text). */
+export const fetchAttachmentContent = (attachmentId: number | string) =>
+  call<string>(withBoard(`/attachments/${attachmentId}/content`))
+
 export const createBoard = (slug: string, name: string, projectId?: string) =>
   call<{ board: { slug: string } }>('/boards', {
     method: 'POST',
