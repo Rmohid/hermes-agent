@@ -773,6 +773,48 @@ class TestPinnedGuard:
         assert result["success"] is True
 
 
+class TestFindSkillSymlink:
+    """_find_skill must follow directory symlinks to discover skills."""
+
+    def test_symlinked_skill_dir_is_found(self, tmp_path):
+        """A skill directory symlinked into a skills root must be found."""
+        real_skill = tmp_path / "real" / "symlinked-skill"
+        real_skill.mkdir(parents=True)
+        (real_skill / "SKILL.md").write_text(
+            "---\nname: symlinked-skill\ndescription: A symlinked skill.\n---\n"
+        )
+        skills_root = tmp_path / "skills"
+        skills_root.mkdir()
+        link = skills_root / "symlinked-skill"
+        link.symlink_to(real_skill, target_is_directory=True)
+
+        with patch("tools.skill_manager_tool.SKILLS_DIR", skills_root), \
+             patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_root]):
+            from tools.skill_manager_tool import _find_skill
+            result = _find_skill("symlinked-skill")
+
+        assert result is not None, "_find_skill should find symlinked skill dir"
+        assert result["path"].name == "symlinked-skill"
+
+    def test_real_skill_still_found(self, tmp_path):
+        """Non-symlinked skills still work after the os.walk change."""
+        skills_root = tmp_path / "skills"
+        skills_root.mkdir()
+        real = skills_root / "real-skill"
+        real.mkdir()
+        (real / "SKILL.md").write_text(
+            "---\nname: real-skill\ndescription: A real skill.\n---\n"
+        )
+
+        with patch("tools.skill_manager_tool.SKILLS_DIR", skills_root), \
+             patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_root]):
+            from tools.skill_manager_tool import _find_skill
+            result = _find_skill("real-skill")
+
+        assert result is not None
+        assert result["path"].name == "real-skill"
+
+
 # ---------------------------------------------------------------------------
 # _delete_skill — recursive-delete safety (port of Kilo Code #11240)
 # ---------------------------------------------------------------------------

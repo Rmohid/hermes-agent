@@ -34,6 +34,7 @@ Directory layout for user skills:
 
 import json
 import logging
+import os
 import re
 import shutil
 import contextvars as _ctxvars
@@ -654,11 +655,15 @@ def _find_skill(name: str) -> Optional[Dict[str, Any]]:
     for skills_dir in get_all_skills_dirs():
         if not skills_dir.exists():
             continue
-        for skill_md in skills_dir.rglob("SKILL.md"):
-            if is_excluded_skill_path(skill_md):
-                continue
-            if skill_md.parent.name == name:
-                return {"path": skill_md.parent}
+        for root, _dirs, files in os.walk(skills_dir, followlinks=True):
+            for fname in files:
+                if fname != "SKILL.md":
+                    continue
+                skill_md = Path(root) / fname
+                if is_excluded_skill_path(skill_md):
+                    continue
+                if skill_md.parent.name == name:
+                    return {"path": skill_md.parent}
     return None
 
 
