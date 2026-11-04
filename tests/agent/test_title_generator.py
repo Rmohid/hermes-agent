@@ -86,6 +86,17 @@ class TestGenerateTitle:
         assert is_titleable_user_message(msg) is True
         assert derive_title(msg) == "Review @file:notes.txt and fix the off-by-one"
 
+    def test_guard_admits_an_attachment_only_opener_that_carries_a_paste_preview(self):
+        """A Desktop large paste reaches the titler as a bare ``@file:`` reference
+        plus a ``title_preview`` of the pasted text. The preview IS the topic, so
+        the #92068 refusal (a silent file drop has no topic) must not fire."""
+        ref = "@file:/Users/u/.hermes/attachments/pasted_content_2026-11-04_17-33-21-634_984b2f.txt"
+
+        assert is_titleable_user_message(ref) is False
+        assert is_titleable_user_message(ref, "Process-change spec interview for the estate") is True
+        # A blank preview is not a preview: the file drop stays refused.
+        assert is_titleable_user_message(ref, "   ") is False
+
     def test_title_input_budget_and_manual_attachments_stay_unread(self):
         title_input = build_title_input("Describe the release plan", "p" * MAX_TITLE_INPUT_CHARS)
 
@@ -618,6 +629,32 @@ class TestMaybeAutoTitle:
             maybe_auto_title(db, "sess-1", opener, [])
         assert db.get_session_title("sess-1") is None
         mock_auto.assert_not_called()
+
+    def test_a_paste_preview_names_the_session_behind_an_attachment_opener(self, tmp_path):
+        """A large paste arrives as a bare ``@file:`` opener plus a preview. Naming the
+        session from the preview is the whole point of carrying it: without it the row
+        shows a file path forever and the chat cannot be found by title."""
+        db = SessionDB(tmp_path / "state.db")
+        db.create_session(session_id="sess-1", source="cli")
+        opener = "@file:/Users/u/.hermes/attachments/pasted_content_2026-11-04_17-33-24-730_ab12cd.txt"
+        config = {"auxiliary": {"title_generation": {"enabled": True, "model_upgrade_enabled": False}}}
+        with patch("hermes_cli.config.load_config_readonly", return_value=config), \
+             patch("agent.memory_provider.spawn_context_thread") as thread:
+            maybe_auto_title(db, "sess-1", opener, [], title_preview="Process-change spec interview for the estate")
+        assert db.get_session_title("sess-1") == "Process-change spec interview for the estate"
+        assert db.get_session_title_source("sess-1") == "derived"
+        thread.assert_not_called()
+
+    def test_a_bare_attachment_with_no_preview_stays_untitled(self, tmp_path):
+        """#92068 stays: a silent file drop has no topic to name the session after."""
+        db = SessionDB(tmp_path / "state.db")
+        db.create_session(session_id="sess-1", source="cli")
+        config = {"auxiliary": {"title_generation": {"enabled": True, "model_upgrade_enabled": True}}}
+        with patch("hermes_cli.config.load_config_readonly", return_value=config), \
+             patch("agent.memory_provider.spawn_context_thread") as thread:
+            maybe_auto_title(db, "sess-1", "@file:/Users/u/.hermes/attachments/report.pdf", [])
+        assert db.get_session_title("sess-1") is None
+        thread.assert_not_called()
 
     def test_a_multimodal_turn_counts_as_a_real_question(self, tmp_path):
         """"Here's a screenshot, fix the login" is a question, parts list or not.
